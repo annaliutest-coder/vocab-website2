@@ -91,18 +91,20 @@
       flex-shrink: 0;
     }
     
+    /* 【修改】輸入框樣式調整 */
     .input-area {
       width: 100%;
       padding: 15px;
       border: 2px solid #ddd;
       border-radius: 10px;
-      resize: none;
-      font-size: 16px;
-      line-height: 1.6;
+      resize: vertical; /* 【修改】允許垂直縮放 */
+      font-size: 18px;  /* 【修改】加大字體 */
+      line-height: 1.8; /* 【修改】增加行高 */
       margin-bottom: 15px;
       transition: border-color 0.3s;
       flex-shrink: 0;
-      min-height: 150px; /* 給輸入框一個最小高度 */
+      min-height: 400px; /* 【修改】加大預設高度，讓文章完整呈現 */
+      font-family: 'Microsoft JhengHei', sans-serif;
     }
     
     .input-area:focus {
@@ -177,8 +179,6 @@
         cursor: pointer;
     }
     .action-btn:hover { background: #cbd5e0; }
-    
-    /* 新增：合併按鈕樣式 */
     .merge-btn { background: #e6fffa; color: #2c7a7b; }
     .merge-btn:hover { background: #b2f5ea; }
     

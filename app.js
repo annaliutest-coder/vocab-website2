@@ -1,4 +1,4 @@
-// app.js - 網站版生詞分析助手（含分課過濾 & 手動切分功能）
+// app.js - 網站版生詞分析助手（含分冊累積選擇 & 手動切分功能）
 
 let tbclData = {};
 let lessonData = {}; // 儲存 {"B1L1": [...], "B1L2": [...]}
@@ -7,7 +7,10 @@ let selectedLessons = new Set(); // 使用者勾選的課數
 let finalBlocklist = new Set(); // 最終用來過濾的清單 (課本 + 手動)
 
 // 用於手動切分
-let editingIndex = -1; // 當前正在編輯的單字在 window.lastAnalysis 中的索引
+let editingIndex = -1;
+
+// 定義冊別順序
+const BOOK_ORDER = ['B1', 'B2', 'B3', 'B4', 'B5', 'B6'];
 
 // 初始化
 document.addEventListener('DOMContentLoaded', async () => {
@@ -26,8 +29,10 @@ async function loadData() {
     const lessonRes = await fetch('vocab_by_lesson.json');
     lessonData = await lessonRes.json();
     
-    renderLessonCheckboxes();
+    // 預設全選
+    Object.keys(lessonData).forEach(k => selectedLessons.add(k));
     
+    renderLessonCheckboxes();
     console.log('資料載入完成');
   } catch (error) {
     console.error('載入資料失敗:', error);
@@ -35,77 +40,159 @@ async function loadData() {
   }
 }
 
-// 2. 產生課數勾選單
+// 2. 產生課數勾選單 (改良版：分冊摺疊)
 function renderLessonCheckboxes() {
   const container = document.getElementById('lessonCheckboxes');
   container.innerHTML = '';
 
-  const sortedLessons = Object.keys(lessonData).sort((a, b) => {
-    return a.localeCompare(b, undefined, { numeric: true, sensitivity: 'base' });
+  // 將資料按冊分組
+  const books = {};
+  BOOK_ORDER.forEach(b => books[b] = []);
+
+  Object.keys(lessonData).forEach(lessonKey => {
+    // 解析冊別 (例如 B1L1 -> B1)
+    const match = lessonKey.match(/^(B\d+)/);
+    if (match && books[match[1]]) {
+        books[match[1]].push(lessonKey);
+    }
   });
 
-  sortedLessons.forEach(lesson => {
-    const wrapper = document.createElement('div');
-    wrapper.className = 'checkbox-item';
-    
-    const checkbox = document.createElement('input');
-    checkbox.type = 'checkbox';
-    checkbox.value = lesson;
-    checkbox.checked = true;
-    checkbox.className = 'lesson-cb';
-    
-    checkbox.addEventListener('change', () => {
-        updateSelectedLessons();
-        updateBlocklist();
-    });
+  // 針對每一冊建立 UI
+  BOOK_ORDER.forEach(bookName => {
+      const lessons = books[bookName];
+      if (lessons.length === 0) return;
 
-    const label = document.createElement('span');
-    label.textContent = lesson;
-    
-    wrapper.onclick = (e) => {
-        if (e.target !== checkbox) {
-            checkbox.checked = !checkbox.checked;
-            checkbox.dispatchEvent(new Event('change'));
-        }
-    };
+      // 排序課別 (B1L2 排在 B1L10 前面)
+      lessons.sort((a, b) => a.localeCompare(b, undefined, { numeric: true }));
 
-    wrapper.appendChild(checkbox);
-    wrapper.appendChild(label);
-    container.appendChild(wrapper);
-    
-    selectedLessons.add(lesson);
+      // 建立分組容器
+      const groupDiv = document.createElement('div');
+      groupDiv.className = 'book-group';
+
+      // 標題列
+      const header = document.createElement('div');
+      header.className = 'book-header';
+      header.innerHTML = `<span>${bookName} (${lessons.length} 課)</span> <span style="font-size:12px">▼</span>`;
+      
+      // 內容區 (預設收合，除了第一冊方便看)
+      const content = document.createElement('div');
+      content.className = 'book-content';
+      content.id = `content-${bookName}`;
+      if (bookName === 'B1') content.classList.add('open');
+
+      // 點擊標題展開/收合
+      header.onclick = () => {
+          content.classList.toggle('open');
+      };
+
+      // 產生該冊的所有課別 checkbox
+      lessons.forEach(lesson => {
+          const wrapper = document.createElement('label');
+          wrapper.className = 'checkbox-item';
+          
+          const checkbox = document.createElement('input');
+          checkbox.type = 'checkbox';
+          checkbox.value = lesson;
+          checkbox.className = `lesson-cb book-${bookName}`; // 加入 class 方便批次選
+          checkbox.checked = selectedLessons.has(lesson);
+
+          checkbox.addEventListener('change', () => {
+              if (checkbox.checked) selectedLessons.add(lesson);
+              else selectedLessons.delete(lesson);
+              updateSelectedCountUI();
+              updateBlocklist();
+          });
+
+          wrapper.appendChild(checkbox);
+          wrapper.appendChild(document.createTextNode(lesson));
+          content.appendChild(wrapper);
+      });
+
+      groupDiv.appendChild(header);
+      groupDiv.appendChild(content);
+      container.appendChild(groupDiv);
   });
   
   updateSelectedCountUI();
 }
 
-// 3. 全選/取消/範圍選取 功能
-window.toggleAllLessons = function(checked) {
-    const checkboxes = document.querySelectorAll('.lesson-cb');
-    checkboxes.forEach(cb => cb.checked = checked);
-    updateSelectedLessons();
-    updateBlocklist();
-}
+// ==========================================
+// 新增：批次選擇邏輯
+// ==========================================
 
-window.selectLessonRange = function(prefix) {
+// 累積選擇 (Select Up To)
+// 例如選 B3，會選取 B1, B2, B3 的所有課，並取消 B4, B5, B6
+window.selectUpTo = function(targetBook) {
+    const targetIndex = BOOK_ORDER.indexOf(targetBook);
+    if (targetIndex === -1) return;
+
+    // 遍歷所有 Checkbox
     const checkboxes = document.querySelectorAll('.lesson-cb');
     checkboxes.forEach(cb => {
-        if (cb.value.startsWith(prefix)) {
-            cb.checked = true;
-        } else {
-             cb.checked = false; 
+        const lesson = cb.value;
+        const match = lesson.match(/^(B\d+)/);
+        if (match) {
+            const book = match[1];
+            const bookIndex = BOOK_ORDER.indexOf(book);
+            
+            // 如果該書在目標之前或就是目標 -> 勾選
+            if (bookIndex <= targetIndex) {
+                cb.checked = true;
+                selectedLessons.add(lesson);
+            } else {
+                // 之後的書 -> 取消
+                cb.checked = false;
+                selectedLessons.delete(lesson);
+            }
         }
     });
-    updateSelectedLessons();
+
+    updateSelectedCountUI();
     updateBlocklist();
+    // 自動展開選到的最後一冊，方便查看
+    document.querySelectorAll('.book-content').forEach(el => el.classList.remove('open'));
+    const targetContent = document.getElementById(`content-${targetBook}`);
+    if (targetContent) targetContent.classList.add('open');
 }
 
-function updateSelectedLessons() {
+// 單冊開關 (Toggle Volume)
+// 例如點 B2，如果 B2 全選則全取消，否則全選 B2 (不影響其他冊)
+window.toggleBook = function(targetBook) {
+    const checkboxes = document.querySelectorAll(`.lesson-cb.book-${targetBook}`);
+    
+    // 檢查目前是否全選
+    let allChecked = true;
+    checkboxes.forEach(cb => {
+        if (!cb.checked) allChecked = false;
+    });
+
+    // 反轉狀態
+    const newState = !allChecked;
+    
+    checkboxes.forEach(cb => {
+        cb.checked = newState;
+        if (newState) selectedLessons.add(cb.value);
+        else selectedLessons.delete(cb.value);
+    });
+
+    updateSelectedCountUI();
+    updateBlocklist();
+    
+    // 自動展開該冊
+    const targetContent = document.getElementById(`content-${targetBook}`);
+    if (targetContent) targetContent.classList.add('open');
+}
+
+// 全選/清空
+window.toggleAllLessons = function(checked) {
+    const checkboxes = document.querySelectorAll('.lesson-cb');
     selectedLessons.clear();
-    document.querySelectorAll('.lesson-cb:checked').forEach(cb => {
-        selectedLessons.add(cb.value);
+    checkboxes.forEach(cb => {
+        cb.checked = checked;
+        if (checked) selectedLessons.add(cb.value);
     });
     updateSelectedCountUI();
+    updateBlocklist();
 }
 
 function updateSelectedCountUI() {
@@ -188,7 +275,6 @@ function setupEventListeners() {
   document.getElementById('copyBtn').addEventListener('click', copyResults);
   document.getElementById('exportBtn').addEventListener('click', exportJSON);
   
-  // 監聽 Enter 鍵在切分輸入框
   document.getElementById('splitInput').addEventListener('keypress', function (e) {
     if (e.key === 'Enter') {
       confirmSplit();
@@ -229,7 +315,6 @@ function analyzeText() {
     results.push({ word, level });
   });
 
-  // 儲存結果並顯示
   window.lastAnalysis = results;
   displayResults();
 }
@@ -267,7 +352,6 @@ function displayResults() {
   }
 
   const wordCount = results.length;
-  // 簡單估算總字數
   const charCount = document.getElementById('inputText').value.length;
   
   document.getElementById('stats').innerHTML = `
@@ -285,21 +369,17 @@ window.openSplitModal = function(index) {
     const modal = document.getElementById('splitModal');
     const input = document.getElementById('splitInput');
     
-    input.value = item.word; // 預設填入原字
+    input.value = item.word; 
     modal.style.display = 'block';
     
-    setTimeout(() => {
-        input.focus();
-    }, 100);
+    setTimeout(() => { input.focus(); }, 100);
 }
 
-// 關閉切分視窗
 window.closeSplitModal = function() {
     document.getElementById('splitModal').style.display = 'none';
     editingIndex = -1;
 }
 
-// 確認切分
 window.confirmSplit = function() {
     if (editingIndex === -1) return;
     
@@ -341,11 +421,7 @@ function showStatus(msg, type) {
 
 function copyResults() {
   if (!window.lastAnalysis || window.lastAnalysis.length === 0) return;
-  
-  const text = window.lastAnalysis
-    .map((item, i) => `${i+1}. ${item.word} (Level ${item.level})`)
-    .join('\n');
-    
+  const text = window.lastAnalysis.map((item, i) => `${i+1}. ${item.word} (Level ${item.level})`).join('\n');
   navigator.clipboard.writeText(text).then(() => alert('已複製到剪貼簿'));
 }
 

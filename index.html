@@ -14,29 +14,34 @@
     body {
       font-family: 'Microsoft JhengHei', 'Segoe UI', sans-serif;
       background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-      min-height: 100vh;
+      height: 100vh; /* 固定高度為視窗高度 */
       padding: 20px;
+      overflow: hidden; /* 防止整個網頁出現捲軸 */
     }
     
     .container {
       max-width: 1200px;
       margin: 0 auto;
+      height: 100%; /* 繼承高度 */
+      display: flex;
+      flex-direction: column;
     }
     
     header {
       text-align: center;
       color: white;
-      margin-bottom: 30px;
+      margin-bottom: 20px;
+      flex-shrink: 0; /* 防止 header 被壓縮 */
     }
     
     header h1 {
-      font-size: 36px;
-      margin-bottom: 10px;
+      font-size: 32px;
+      margin-bottom: 5px;
       text-shadow: 0 2px 10px rgba(0,0,0,0.2);
     }
     
     header p {
-      font-size: 16px;
+      font-size: 14px;
       opacity: 0.9;
     }
     
@@ -44,8 +49,9 @@
       display: grid;
       grid-template-columns: 1fr 1fr;
       gap: 20px;
-      height: calc(100vh - 150px);
-      min-height: 600px;
+      flex: 1; /* 佔滿剩餘空間 */
+      overflow: hidden; /* 內部區域獨立捲動 */
+      min-height: 0; /* 重要：防止 grid item 溢出 */
     }
     
     .panel {
@@ -55,6 +61,24 @@
       display: flex;
       flex-direction: column;
       box-shadow: 0 10px 25px rgba(0,0,0,0.2);
+      overflow-y: auto; /* 讓面板內部可以垂直捲動 */
+      height: 100%; /* 填滿 grid cell */
+    }
+
+    /* 捲軸美化 */
+    .panel::-webkit-scrollbar {
+        width: 8px;
+    }
+    .panel::-webkit-scrollbar-track {
+        background: #f1f1f1;
+        border-radius: 4px;
+    }
+    .panel::-webkit-scrollbar-thumb {
+        background: #c1c1c1;
+        border-radius: 4px;
+    }
+    .panel::-webkit-scrollbar-thumb:hover {
+        background: #a8a8a8;
     }
     
     .panel h2 {
@@ -64,10 +88,10 @@
       display: flex;
       justify-content: space-between;
       align-items: center;
+      flex-shrink: 0;
     }
     
     .input-area {
-      flex: 1;
       width: 100%;
       padding: 15px;
       border: 2px solid #ddd;
@@ -77,6 +101,8 @@
       line-height: 1.6;
       margin-bottom: 15px;
       transition: border-color 0.3s;
+      flex-shrink: 0;
+      min-height: 150px; /* 給輸入框一個最小高度 */
     }
     
     .input-area:focus {
@@ -87,6 +113,7 @@
     .controls {
       display: flex;
       gap: 10px;
+      flex-shrink: 0;
     }
     
     button {
@@ -103,25 +130,13 @@
       transform: scale(0.98);
     }
     
-    .btn-primary {
-      background: #667eea;
-      color: white;
-      flex: 1;
-    }
-    
-    .btn-secondary {
-      background: #e2e8f0;
-      color: #4a5568;
-    }
-    
-    .btn-success {
-      background: #48bb78;
-      color: white;
-    }
+    .btn-primary { background: #667eea; color: white; flex: 1; }
+    .btn-secondary { background: #e2e8f0; color: #4a5568; }
+    .btn-success { background: #48bb78; color: white; }
     
     .output-area {
       flex: 1;
-      overflow-y: auto;
+      overflow-y: auto; /* 保持原有的輸出區捲動 */
       border: 1px solid #eee;
       border-radius: 10px;
       padding: 10px;
@@ -140,12 +155,7 @@
       border-left: 5px solid #ccc;
     }
 
-    /* 詞彙左側資訊區 */
-    .vocab-info {
-        display: flex;
-        align-items: center;
-        gap: 10px;
-    }
+    .vocab-info { display: flex; align-items: center; gap: 10px; }
     
     .level-tag {
       padding: 4px 8px;
@@ -155,14 +165,8 @@
       font-weight: bold;
     }
 
-    /* 操作按鈕區 */
-    .vocab-actions {
-        opacity: 0.6;
-        transition: opacity 0.2s;
-    }
-    .vocab-item:hover .vocab-actions {
-        opacity: 1;
-    }
+    .vocab-actions { opacity: 0.6; transition: opacity 0.2s; }
+    .vocab-item:hover .vocab-actions { opacity: 1; }
     .action-btn {
         padding: 4px 8px;
         font-size: 12px;
@@ -172,9 +176,7 @@
         margin-left: 5px;
         cursor: pointer;
     }
-    .action-btn:hover {
-        background: #cbd5e0;
-    }
+    .action-btn:hover { background: #cbd5e0; }
     
     .level-1 { border-left-color: #48bb78; } .level-1 .level-tag { background: #48bb78; }
     .level-2 { border-left-color: #38b2ac; } .level-2 .level-tag { background: #38b2ac; }
@@ -192,15 +194,15 @@
       justify-content: space-between;
       color: #666;
       font-size: 14px;
+      flex-shrink: 0;
     }
     
-    /* 舊詞管理面板樣式 */
-    .settings-panel {
-      margin-top: 20px;
-      background: white;
-      padding: 20px;
-      border-radius: 15px;
-      box-shadow: 0 5px 15px rgba(0,0,0,0.1);
+    /* 舊詞管理面板 (現在整合進左側面板) */
+    .settings-section {
+      margin-top: 30px;
+      padding-top: 20px;
+      border-top: 2px dashed #eee;
+      flex-shrink: 0; /* 防止被壓縮 */
     }
     
     .info-box {
@@ -230,58 +232,85 @@
       margin-top: 10px;
     }
 
-    /* Lesson Checkboxes 樣式 */
+    /* Lesson Selector Styles */
     .lesson-selector {
         border: 1px solid #e2e8f0;
         border-radius: 8px;
         padding: 15px;
         margin-bottom: 20px;
         background: #f8fafc;
+        /* 移除 max-height，讓它自然撐開，靠外層面板捲動 */
+        /* max-height: 350px;  <-- 移除這行 */
+        /* overflow-y: auto;   <-- 移除這行 */
+        flex-shrink: 0;
     }
 
-    .lesson-controls {
-        margin-bottom: 10px;
-        display: flex;
-        gap: 10px;
+    .control-row {
+        margin-bottom: 12px;
+        padding-bottom: 12px;
+        border-bottom: 1px solid #e2e8f0;
+    }
+    
+    .control-label {
+        font-size: 13px;
+        color: #666;
+        margin-bottom: 6px;
+        font-weight: bold;
     }
 
-    .lesson-controls button {
-        padding: 5px 10px;
-        font-size: 14px;
+    .btn-xs {
+        padding: 4px 8px;
+        font-size: 12px;
+        margin-right: 4px;
+        margin-bottom: 4px;
     }
 
-    .checkbox-grid {
-        display: grid;
-        grid-template-columns: repeat(auto-fill, minmax(85px, 1fr));
-        gap: 8px;
-        max-height: 250px;
-        overflow-y: auto;
-        padding: 5px;
-        background: white;
+    /* 分冊區塊樣式 */
+    .book-group {
+        margin-bottom: 8px;
         border: 1px solid #ddd;
-        border-radius: 5px;
+        border-radius: 6px;
+        overflow: hidden;
+        background: white;
     }
+
+    .book-header {
+        padding: 8px 12px;
+        background: #f1f5f9;
+        cursor: pointer;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        font-size: 14px;
+        font-weight: bold;
+        user-select: none;
+    }
+
+    .book-header:hover { background: #e2e8f0; }
+
+    .book-content {
+        padding: 8px;
+        display: none;
+        grid-template-columns: repeat(auto-fill, minmax(80px, 1fr));
+        gap: 6px;
+        background: white;
+    }
+
+    .book-content.open { display: grid; }
 
     .checkbox-item {
         display: flex;
         align-items: center;
-        font-size: 13px;
+        font-size: 12px;
         cursor: pointer;
         padding: 4px;
         border-radius: 4px;
-        transition: background 0.2s;
     }
+    
+    .checkbox-item:hover { background-color: #f7fafc; }
+    .checkbox-item input { margin-right: 4px; }
 
-    .checkbox-item:hover {
-        background-color: #edf2f7;
-    }
-
-    .checkbox-item input {
-        margin-right: 6px;
-        cursor: pointer;
-    }
-
-    /* Modal 彈出視窗樣式 */
+    /* Modal */
     .modal {
         display: none; 
         position: fixed; 
@@ -305,30 +334,18 @@
         animation: slideIn 0.3s;
     }
 
-    @keyframes fadeIn {
-        from {opacity: 0} to {opacity: 1}
-    }
-    @keyframes slideIn {
-        from {transform: translateY(-20px)} to {transform: translateY(0)}
-    }
+    @keyframes fadeIn { from {opacity: 0} to {opacity: 1} }
+    @keyframes slideIn { from {transform: translateY(-20px)} to {transform: translateY(0)} }
 
     @media (max-width: 768px) {
-      .main-content {
-        grid-template-columns: 1fr;
-        height: auto;
-      }
-      .input-area {
-        min-height: 200px;
-      }
-      .output-area {
-        min-height: 300px;
-      }
-      .button-group {
-        flex-wrap: wrap;
-      }
-      .btn-primary {
-        width: 100%;
-      }
+      body { height: auto; overflow: auto; }
+      .container { height: auto; }
+      .main-content { grid-template-columns: 1fr; height: auto; overflow: visible; }
+      .panel { height: auto; overflow: visible; }
+      .input-area { min-height: 200px; }
+      .output-area { min-height: 300px; }
+      .button-group { flex-wrap: wrap; }
+      .btn-primary { width: 100%; }
     }
   </style>
 </head>
@@ -337,7 +354,7 @@
 <div class="container">
   <header>
     <h1>教材生詞分析助手</h1>
-    <p>自動中文斷詞、TBCL 分級、舊詞過濾（支援手動切分生詞）</p>
+    <p>自動中文斷詞、TBCL 分級、舊詞過濾（支援累積選冊與單課微調）</p>
   </header>
 
   <div class="main-content">
@@ -368,22 +385,60 @@
       <div style="margin-top: 20px;">
         <h2>
             📚 舊詞範圍設定 
-            <span style="font-size: 0.7em; color: #666; font-weight: normal;">(目前已選: <span id="selectedLessonCount">0</span> 課)</span>
+            <span style="font-size: 0.7em; color: #666; font-weight: normal;">(已選: <span id="selectedLessonCount">0</span> 課)</span>
         </h2>
         
         <div class="lesson-selector">
-            <div class="lesson-controls">
-                <button onclick="toggleAllLessons(true)" class="btn-secondary">全選</button>
-                <button onclick="toggleAllLessons(false)" class="btn-secondary">取消</button>
-                <button onclick="selectLessonRange('B1')" class="btn-secondary">B1</button>
-                <button onclick="selectLessonRange('B2')" class="btn-secondary">B2</button>
-                <button onclick="selectLessonRange('B3')" class="btn-secondary">B3</button>
-                <button onclick="selectLessonRange('B4')" class="btn-secondary">B4</button>
+            <!-- 1. 快速累積 -->
+            <div class="control-row">
+                <div class="control-label">🚀 快速累積 (選到哪一冊?):</div>
+                <div style="display: flex; gap: 5px; flex-wrap: wrap;">
+                    <button onclick="selectUpTo('B1')" class="btn-secondary btn-xs">B1</button>
+                    <button onclick="selectUpTo('B2')" class="btn-secondary btn-xs">B2</button>
+                    <button onclick="selectUpTo('B3')" class="btn-secondary btn-xs">B3</button>
+                    <button onclick="selectUpTo('B4')" class="btn-secondary btn-xs">B4</button>
+                    <button onclick="selectUpTo('B5')" class="btn-secondary btn-xs">B5</button>
+                    <button onclick="selectUpTo('B6')" class="btn-secondary btn-xs">B6</button>
+                    <button onclick="toggleAllLessons(false)" class="btn-secondary btn-xs" style="color: #e53e3e;">清空</button>
+                </div>
             </div>
-            <div id="lessonCheckboxes" class="checkbox-grid">
+
+            <!-- 2. 單冊開關 -->
+            <div class="control-row">
+                <div class="control-label">📚 單冊開關 (可複選):</div>
+                <div style="display: flex; gap: 5px; flex-wrap: wrap;">
+                    <button onclick="toggleBook('B1')" class="btn-secondary btn-xs">+B1</button>
+                    <button onclick="toggleBook('B2')" class="btn-secondary btn-xs">+B2</button>
+                    <button onclick="toggleBook('B3')" class="btn-secondary btn-xs">+B3</button>
+                    <button onclick="toggleBook('B4')" class="btn-secondary btn-xs">+B4</button>
+                    <button onclick="toggleBook('B5')" class="btn-secondary btn-xs">+B5</button>
+                    <button onclick="toggleBook('B6')" class="btn-secondary btn-xs">+B6</button>
+                </div>
+            </div>
+
+            <!-- 3. 詳細清單 (分冊顯示) -->
+            <div id="lessonCheckboxes">
                 <div style="padding: 10px; color: #666;">載入中...</div>
             </div>
         </div>
+      </div>
+
+      <!-- 手動舊詞管理 (整合到左側面板底部) -->
+      <div class="settings-section">
+        <h2>⚙️ 手動補充舊詞 (非課本詞彙)</h2>
+        <div class="info-box">
+          <strong>💡 說明:</strong> 系統會自動過濾上方勾選的課本單字。如需額外補充，請在下方輸入。
+        </div>
+        <textarea id="oldVocabInput" class="input-area" style="min-height: 100px;" placeholder="輸入要補充的舊詞"></textarea>
+        <div class="button-group">
+          <button id="addOldVocabBtn" class="btn-success">➕ 新增</button>
+          <button id="showOldVocabBtn" class="btn-secondary">📋 顯示</button>
+          <button id="clearOldVocabBtn" class="btn-secondary">🗑️ 清除</button>
+        </div>
+        <div style="margin-top: 10px; color: #666;">
+            目前總過濾詞彙數: <strong id="totalBlockedCount">0</strong> 個
+        </div>
+        <div id="vocabStatus" class="status"></div>
       </div>
     </div>
 
@@ -392,8 +447,8 @@
       <h2>
         📊 分析結果
         <div>
-          <button id="copyBtn" class="btn-success" style="padding: 5px 10px; font-size: 14px;">📋 複製全部</button>
-          <button id="exportBtn" class="btn-secondary" style="padding: 5px 10px; font-size: 14px;">💾 匯出 JSON</button>
+          <button id="copyBtn" class="btn-success" style="padding: 5px 10px; font-size: 14px;">📋 複製</button>
+          <button id="exportBtn" class="btn-secondary" style="padding: 5px 10px; font-size: 14px;">💾 匯出</button>
         </div>
       </h2>
       <div id="outputList" class="output-area">
@@ -407,49 +462,17 @@
       </div>
     </div>
   </div>
-
-  <!-- 下方：手動舊詞管理 -->
-  <div class="settings-panel">
-    <h2>⚙️ 手動補充舊詞 (非課本詞彙)</h2>
-    
-    <div class="info-box">
-      <strong>💡 說明:</strong><br>
-      系統會自動過濾上方「📚 舊詞範圍」中已勾選的課本單字。<br>
-      如果您有額外的舊詞（例如學生已學過的補充單字），請在下方輸入。
-    </div>
-    
-    <textarea 
-      id="oldVocabInput" 
-      class="input-area" 
-      style="min-height: 100px;"
-      placeholder="輸入要補充的舊詞 (每行一個，或用逗號分隔)"></textarea>
-    
-    <div class="button-group">
-      <button id="addOldVocabBtn" class="btn-success">➕ 新增補充舊詞</button>
-      <button id="showOldVocabBtn" class="btn-secondary">📋 顯示目前補充舊詞</button>
-      <button id="clearOldVocabBtn" class="btn-secondary">🗑️ 清除補充舊詞</button>
-    </div>
-    
-    <div style="margin-top: 10px; color: #666;">
-        目前總過濾詞彙數 (課本 + 補充): <strong id="totalBlockedCount">0</strong> 個
-    </div>
-    
-    <div id="vocabStatus" class="status"></div>
-  </div>
 </div>
 
 <!-- 切分單字彈出視窗 -->
 <div id="splitModal" class="modal">
   <div class="modal-content">
     <h3 style="margin-bottom: 10px;">✂️ 手動切分單字</h3>
-    <p style="margin-bottom: 10px; font-size: 14px; color: #666;">
-        請在要切分的地方加入<strong>空白</strong>。<br>
-        例如：將「還都」改為「還 都」。
-    </p>
+    <p style="margin-bottom: 10px; font-size: 14px; color: #666;">請在要切分的地方加入<strong>空白</strong>。</p>
     <input type="text" id="splitInput" class="input-area" style="height: 50px; font-size: 20px; text-align: center;">
     <div class="controls" style="justify-content: flex-end; margin-top: 15px;">
         <button onclick="closeSplitModal()" class="btn-secondary">取消</button>
-        <button onclick="confirmSplit()" class="btn-primary">確定切分</button>
+        <button onclick="confirmSplit()" class="btn-primary">確定</button>
     </div>
   </div>
 </div>

@@ -1,4 +1,4 @@
-// app.js - 網站版生詞分析助手（含分冊累積選擇、手動切分 & 合併功能）
+// app.js - 網站版生詞分析助手（含分冊累積選擇、手動切分 & 合併功能 & 定位功能）
 
 let tbclData = {};
 let lessonData = {}; // 儲存 {"B1L1": [...], "B1L2": [...]}
@@ -6,7 +6,7 @@ let customOldVocab = new Set(); // 手動輸入的補充舊詞
 let selectedLessons = new Set(); // 使用者勾選的課數
 let finalBlocklist = new Set(); // 最終用來過濾的清單 (課本 + 手動)
 
-// 【新增】已知詞彙庫 (用於斷詞引擎，確保這些詞不被切開)
+// 已知詞彙庫 (用於斷詞引擎，確保這些詞不被切開)
 // 包含使用者指定的預設詞
 let knownWords = new Set(["紅色", "護龍", "還都", "看書", "吃飯", "一定"]); 
 
@@ -36,8 +36,7 @@ async function loadData() {
     // 預設全選
     Object.keys(lessonData).forEach(k => selectedLessons.add(k));
     
-    // 【新增】將所有課本生詞加入「已知詞彙庫」，增強斷詞能力
-    // 這樣像「護龍」這種課本詞彙就會優先被斷出來，不會被切碎
+    // 將所有課本生詞加入「已知詞彙庫」，增強斷詞能力
     Object.values(lessonData).forEach(wordList => {
         wordList.forEach(w => knownWords.add(w));
     });
@@ -343,16 +342,14 @@ function analyzeText() {
 
   let words = [];
   if (useAdvanced && typeof advancedSegment !== 'undefined') {
-    // 【修改】建立一個增強版的字典，包含 TBCL 和 所有已知詞彙 (課本詞 + 手動詞)
-    // 目的：告訴斷詞引擎這些是「一個詞」，請優先匹配，不要亂切
+    // 建立增強版的字典，包含 TBCL 和 所有已知詞彙
     const segmentDict = { ...tbclData };
     knownWords.forEach(w => {
-        if (!segmentDict[w]) segmentDict[w] = '0'; // 若 TBCL 沒有，暫定 Level 0 (代表已知但未分級)
+        if (!segmentDict[w]) segmentDict[w] = '0'; 
     });
 
     words = advancedSegment(text, segmentDict, finalBlocklist, true, useGrammar);
   } else {
-    // 瀏覽器原生斷詞
     const segmenter = new Intl.Segmenter('zh-TW', { granularity: 'word' });
     words = Array.from(segmenter.segment(text)).map(s => s.segment);
   }
@@ -367,7 +364,6 @@ function analyzeText() {
     if (uniqueWords.has(word)) return;
     uniqueWords.add(word);
 
-    // 查詢等級
     let level = tbclData[word] || '0';
     results.push({ word, level });
   });
@@ -380,7 +376,7 @@ function isPunctuation(text) {
   return /^[。，、；：！？「」『』（）《》…—\s\d\w]+$/.test(text);
 }
 
-// 7. 顯示結果 (含切分與合併功能)
+// 7. 顯示結果 (含切分、合併 & 定位功能)
 function displayResults() {
   const results = window.lastAnalysis || [];
   const container = document.getElementById('outputList');
@@ -392,10 +388,19 @@ function displayResults() {
     results.forEach((item, index) => {
       const div = document.createElement('div');
       div.className = `vocab-item level-${item.level}`;
+      div.style.cursor = 'pointer'; // 增加手形游標，提示可點擊
+      div.title = `點擊在原文中定位「${item.word}」`; // 提示文字
+
+      // 點擊事件：定位詞彙
+      div.onclick = (e) => {
+          // 如果點擊的是按鈕，不要觸發定位 (避免衝突)
+          if (e.target.tagName === 'BUTTON') return;
+          highlightWordInInput(item.word);
+      };
       
       const levelText = item.level === '0' ? '未知' : `Level ${item.level}`;
       
-      // 【新增】合併按鈕 (只要不是最後一個詞，都可以跟下一個合併)
+      // 合併按鈕
       let mergeBtn = '';
       if (index < results.length - 1) {
           mergeBtn = `<button class="action-btn merge-btn" onclick="mergeWithNext(${index})" title="與下一個詞合併">🔗 合併</button>`;
@@ -424,25 +429,48 @@ function displayResults() {
   `;
 }
 
-// 【新增】合併功能實作
+// 【新增】在原文中定位詞彙
+function highlightWordInInput(word) {
+    const input = document.getElementById('inputText');
+    if (!input || !word) return;
+
+    const text = input.value;
+    const index = text.indexOf(word); // 簡單搜尋第一個出現的位置
+    // 若要支援搜尋「下一個」，需要紀錄上次搜尋位置，目前先做簡單版
+
+    if (index !== -1) {
+        input.focus();
+        input.setSelectionRange(index, index + word.length);
+        
+        // 計算捲動位置 (簡單估算)
+        // textarea 的捲動比較複雜，blur 再 focus 有時能幫助定位
+        // 或者使用 scrollIntoView 如果是 div
+        
+        // 嘗試讓選取區塊捲動到可見範圍
+        // 這在標準 textarea 中不一定完全精準，但通常有效
+        const blurFocus = () => {
+            input.blur();
+            input.focus();
+        };
+        // 稍微延遲以確保 UI 更新
+        setTimeout(blurFocus, 10);
+    } else {
+        alert(`在原文中找不到「${word}」`);
+    }
+}
+
+// 合併功能
 window.mergeWithNext = function(index) {
     const list = window.lastAnalysis;
     if (!list || index >= list.length - 1) return;
     
-    // 取得當前詞與下一個詞
     const w1 = list[index];
     const w2 = list[index + 1];
     
-    // 合併字串
     const mergedWord = w1.word + w2.word;
-    
-    // 重新查詢合併後新詞的等級 (如果不在 TBCL 裡，就設為 '0')
     const mergedLevel = tbclData[mergedWord] || '0';
     
-    // 更新陣列：移除這兩個詞 (deleteCount: 2)，插入合併後的新詞
     list.splice(index, 2, { word: mergedWord, level: mergedLevel });
-    
-    // 重新渲染畫面
     displayResults();
 }
 

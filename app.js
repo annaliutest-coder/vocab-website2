@@ -28,10 +28,10 @@ async function loadData() {
 
     const lessonRes = await fetch('vocab_by_lesson.json');
     lessonData = await lessonRes.json();
-    
+
     // 預設全選
     Object.keys(lessonData).forEach(k => selectedLessons.add(k));
-    
+
     renderLessonCheckboxes();
     console.log('資料載入完成');
   } catch (error) {
@@ -40,7 +40,7 @@ async function loadData() {
   }
 }
 
-// 2. 產生課數勾選單 (改良版：分冊摺疊)
+// 2. 產生課數勾選單 (改良版：標題含全選功能)
 function renderLessonCheckboxes() {
   const container = document.getElementById('lessonCheckboxes');
   container.innerHTML = '';
@@ -53,179 +53,249 @@ function renderLessonCheckboxes() {
     // 解析冊別 (例如 B1L1 -> B1)
     const match = lessonKey.match(/^(B\d+)/);
     if (match && books[match[1]]) {
-        books[match[1]].push(lessonKey);
+      books[match[1]].push(lessonKey);
     }
   });
 
   // 針對每一冊建立 UI
   BOOK_ORDER.forEach(bookName => {
-      const lessons = books[bookName];
-      if (lessons.length === 0) return;
+    const lessons = books[bookName];
+    if (lessons.length === 0) return;
 
-      // 排序課別 (B1L2 排在 B1L10 前面)
-      lessons.sort((a, b) => a.localeCompare(b, undefined, { numeric: true }));
+    // 排序課別
+    lessons.sort((a, b) => a.localeCompare(b, undefined, { numeric: true }));
 
-      // 建立分組容器
-      const groupDiv = document.createElement('div');
-      groupDiv.className = 'book-group';
+    // 建立分組容器
+    const groupDiv = document.createElement('div');
+    groupDiv.className = 'book-group';
+    groupDiv.dataset.book = bookName; // 方便後續查找
 
-      // 標題列
-      const header = document.createElement('div');
-      header.className = 'book-header';
-      header.innerHTML = `<span>${bookName} (${lessons.length} 課)</span> <span style="font-size:12px">▼</span>`;
-      
-      // 內容區 (預設收合，除了第一冊方便看)
-      const content = document.createElement('div');
-      content.className = 'book-content';
-      content.id = `content-${bookName}`;
-      if (bookName === 'B1') content.classList.add('open');
+    // --- 標題列 (Header) ---
+    const header = document.createElement('div');
+    header.className = 'book-header';
 
-      // 點擊標題展開/收合
-      header.onclick = () => {
-          content.classList.toggle('open');
-      };
+    // A. 全選 Checkbox (新增)
+    const masterCb = document.createElement('input');
+    masterCb.type = 'checkbox';
+    masterCb.className = 'book-master-cb';
+    masterCb.dataset.book = bookName;
+    // 點擊 Checkbox 時全選/全取消該冊，並不觸發摺疊
+    masterCb.onclick = (e) => {
+      e.stopPropagation();
+      const checked = e.target.checked;
+      const lessonCbs = content.querySelectorAll('.lesson-cb');
+      lessonCbs.forEach(cb => {
+        cb.checked = checked;
+        if (checked) selectedLessons.add(cb.value);
+        else selectedLessons.delete(cb.value);
+      });
+      updateBlocklist(); // 更新過濾清單與 UI 狀態
+    };
 
-      // 產生該冊的所有課別 checkbox
-      lessons.forEach(lesson => {
-          const wrapper = document.createElement('label');
-          wrapper.className = 'checkbox-item';
-          
-          const checkbox = document.createElement('input');
-          checkbox.type = 'checkbox';
-          checkbox.value = lesson;
-          checkbox.className = `lesson-cb book-${bookName}`; // 加入 class 方便批次選
-          checkbox.checked = selectedLessons.has(lesson);
+    // B. 標題文字與箭頭
+    const titleSpan = document.createElement('span');
+    titleSpan.textContent = ` ${bookName} (${lessons.length} 課)`;
+    titleSpan.style.flex = '1';
+    titleSpan.style.marginLeft = '8px';
 
-          checkbox.addEventListener('change', () => {
-              if (checkbox.checked) selectedLessons.add(lesson);
-              else selectedLessons.delete(lesson);
-              updateSelectedCountUI();
-              updateBlocklist();
-          });
+    const arrowSpan = document.createElement('span');
+    arrowSpan.textContent = '▼'; // 預設收合
+    arrowSpan.style.fontSize = '12px';
+    arrowSpan.className = 'arrow-icon';
 
-          wrapper.appendChild(checkbox);
-          wrapper.appendChild(document.createTextNode(lesson));
-          content.appendChild(wrapper);
+    header.appendChild(masterCb);
+    header.appendChild(titleSpan);
+    header.appendChild(arrowSpan);
+
+    // --- 內容區 (Content) ---
+    const content = document.createElement('div');
+    content.className = 'book-content';
+    content.id = `content-${bookName}`;
+    // B1 預設展開，其他收合
+    if (bookName === 'B1') {
+      content.classList.add('open');
+      arrowSpan.textContent = '▲';
+    }
+
+    // 點擊標題列(非 checkbox) 觸發摺疊
+    header.onclick = () => {
+      content.classList.toggle('open');
+      const isOpen = content.classList.contains('open');
+      arrowSpan.textContent = isOpen ? '▲' : '▼';
+    };
+
+    // 產生該冊的所有課別 checkbox
+    lessons.forEach(lesson => {
+      const wrapper = document.createElement('label');
+      wrapper.className = 'checkbox-item';
+
+      const checkbox = document.createElement('input');
+      checkbox.type = 'checkbox';
+      checkbox.value = lesson;
+      checkbox.className = `lesson-cb book-${bookName}`;
+      checkbox.checked = selectedLessons.has(lesson);
+
+      checkbox.addEventListener('change', () => {
+        if (checkbox.checked) selectedLessons.add(lesson);
+        else selectedLessons.delete(lesson);
+        updateBlocklist(); // 這會連帶更新 master checkbox 狀態
       });
 
-      groupDiv.appendChild(header);
-      groupDiv.appendChild(content);
-      container.appendChild(groupDiv);
+      wrapper.appendChild(checkbox);
+      wrapper.appendChild(document.createTextNode(lesson));
+      content.appendChild(wrapper);
+    });
+
+    groupDiv.appendChild(header);
+    groupDiv.appendChild(content);
+    container.appendChild(groupDiv);
   });
-  
+
+  // 初始更新一次 Master Checkbox 狀態
+  updateBookMasterStatus();
   updateSelectedCountUI();
 }
 
+// 更新所有分冊標題的 Checkbox 狀態 (全選/半選/未選)
+function updateBookMasterStatus() {
+  BOOK_ORDER.forEach(bookName => {
+    const checkboxes = document.querySelectorAll(`.lesson-cb.book-${bookName}`);
+    if (checkboxes.length === 0) return;
+
+    let checkedCount = 0;
+    checkboxes.forEach(cb => {
+      if (cb.checked) checkedCount++;
+    });
+
+    const masterCb = document.querySelector(`.book-master-cb[data-book="${bookName}"]`);
+    if (masterCb) {
+      masterCb.checked = checkedCount === checkboxes.length;
+      masterCb.indeterminate = checkedCount > 0 && checkedCount < checkboxes.length;
+    }
+  });
+}
+
 // ==========================================
-// 新增：批次選擇邏輯
+// 批次選擇邏輯
 // ==========================================
 
 // 累積選擇 (Select Up To)
-// 例如選 B3，會選取 B1, B2, B3 的所有課，並取消 B4, B5, B6
-window.selectUpTo = function(targetBook) {
-    const targetIndex = BOOK_ORDER.indexOf(targetBook);
-    if (targetIndex === -1) return;
+window.selectUpTo = function (targetBook) {
+  const targetIndex = BOOK_ORDER.indexOf(targetBook);
+  if (targetIndex === -1) return;
 
-    // 遍歷所有 Checkbox
-    const checkboxes = document.querySelectorAll('.lesson-cb');
-    checkboxes.forEach(cb => {
-        const lesson = cb.value;
-        const match = lesson.match(/^(B\d+)/);
-        if (match) {
-            const book = match[1];
-            const bookIndex = BOOK_ORDER.indexOf(book);
-            
-            // 如果該書在目標之前或就是目標 -> 勾選
-            if (bookIndex <= targetIndex) {
-                cb.checked = true;
-                selectedLessons.add(lesson);
-            } else {
-                // 之後的書 -> 取消
-                cb.checked = false;
-                selectedLessons.delete(lesson);
-            }
-        }
-    });
+  const checkboxes = document.querySelectorAll('.lesson-cb');
+  checkboxes.forEach(cb => {
+    const lesson = cb.value;
+    const match = lesson.match(/^(B\d+)/);
+    if (match) {
+      const book = match[1];
+      const bookIndex = BOOK_ORDER.indexOf(book);
 
-    updateSelectedCountUI();
-    updateBlocklist();
-    // 自動展開選到的最後一冊，方便查看
-    document.querySelectorAll('.book-content').forEach(el => el.classList.remove('open'));
-    const targetContent = document.getElementById(`content-${targetBook}`);
-    if (targetContent) targetContent.classList.add('open');
+      if (bookIndex <= targetIndex) {
+        cb.checked = true;
+        selectedLessons.add(lesson);
+      } else {
+        cb.checked = false;
+        selectedLessons.delete(lesson);
+      }
+    }
+  });
+
+  // 自動展開選到的最後一冊
+  document.querySelectorAll('.book-content').forEach(el => el.classList.remove('open'));
+  document.querySelectorAll('.arrow-icon').forEach(el => el.textContent = '▼');
+
+  const targetContent = document.getElementById(`content-${targetBook}`);
+  if (targetContent) {
+    targetContent.classList.add('open');
+    // 更新對應箭頭
+    const group = targetContent.parentElement;
+    const arrow = group.querySelector('.arrow-icon');
+    if (arrow) arrow.textContent = '▲';
+  }
+
+  updateBlocklist();
 }
 
-// 單冊開關 (Toggle Volume)
-// 例如點 B2，如果 B2 全選則全取消，否則全選 B2 (不影響其他冊)
-window.toggleBook = function(targetBook) {
-    const checkboxes = document.querySelectorAll(`.lesson-cb.book-${targetBook}`);
-    
-    // 檢查目前是否全選
-    let allChecked = true;
-    checkboxes.forEach(cb => {
-        if (!cb.checked) allChecked = false;
-    });
+// 單冊開關 (Toggle Volume) - 這是給上方按鈕用的
+window.toggleBook = function (targetBook) {
+  const checkboxes = document.querySelectorAll(`.lesson-cb.book-${targetBook}`);
 
-    // 反轉狀態
-    const newState = !allChecked;
-    
-    checkboxes.forEach(cb => {
-        cb.checked = newState;
-        if (newState) selectedLessons.add(cb.value);
-        else selectedLessons.delete(cb.value);
-    });
+  // 檢查目前是否全選
+  let allChecked = true;
+  checkboxes.forEach(cb => {
+    if (!cb.checked) allChecked = false;
+  });
 
-    updateSelectedCountUI();
-    updateBlocklist();
-    
-    // 自動展開該冊
-    const targetContent = document.getElementById(`content-${targetBook}`);
-    if (targetContent) targetContent.classList.add('open');
+  const newState = !allChecked;
+
+  checkboxes.forEach(cb => {
+    cb.checked = newState;
+    if (newState) selectedLessons.add(cb.value);
+    else selectedLessons.delete(cb.value);
+  });
+
+  // 自動展開該冊
+  const targetContent = document.getElementById(`content-${targetBook}`);
+  if (targetContent) {
+    targetContent.classList.add('open');
+    const group = targetContent.parentElement;
+    const arrow = group.querySelector('.arrow-icon');
+    if (arrow) arrow.textContent = '▲';
+  }
+
+  updateBlocklist();
 }
 
 // 全選/清空
-window.toggleAllLessons = function(checked) {
-    const checkboxes = document.querySelectorAll('.lesson-cb');
-    selectedLessons.clear();
-    checkboxes.forEach(cb => {
-        cb.checked = checked;
-        if (checked) selectedLessons.add(cb.value);
-    });
-    updateSelectedCountUI();
-    updateBlocklist();
+window.toggleAllLessons = function (checked) {
+  const checkboxes = document.querySelectorAll('.lesson-cb');
+  selectedLessons.clear();
+  checkboxes.forEach(cb => {
+    cb.checked = checked;
+    if (checked) selectedLessons.add(cb.value);
+  });
+  updateBlocklist();
 }
 
 function updateSelectedCountUI() {
-    document.getElementById('selectedLessonCount').innerText = selectedLessons.size;
+  document.getElementById('selectedLessonCount').innerText = selectedLessons.size;
 }
 
-// 4. 計算最終過濾清單
+// 4. 計算最終過濾清單 (核心更新函式)
 function updateBlocklist() {
-    finalBlocklist.clear();
-    selectedLessons.forEach(lesson => {
-        const words = lessonData[lesson];
-        if (words) {
-            words.forEach(w => finalBlocklist.add(w));
-        }
-    });
-    customOldVocab.forEach(w => finalBlocklist.add(w));
-    
-    const el = document.getElementById('totalBlockedCount');
-    if (el) el.innerText = finalBlocklist.size;
+  // 1. 更新資料
+  finalBlocklist.clear();
+  selectedLessons.forEach(lesson => {
+    const words = lessonData[lesson];
+    if (words) {
+      words.forEach(w => finalBlocklist.add(w));
+    }
+  });
+  customOldVocab.forEach(w => finalBlocklist.add(w));
+
+  // 2. 更新 UI 數字
+  const el = document.getElementById('totalBlockedCount');
+  if (el) el.innerText = finalBlocklist.size;
+  updateSelectedCountUI();
+
+  // 3. 更新標題 Checkbox 狀態 (全選/半選)
+  updateBookMasterStatus();
 }
 
 // 5. 手動舊詞管理
 function loadCustomVocab() {
-    const stored = localStorage.getItem('customOldVocab');
-    if (stored) {
-        const list = JSON.parse(stored);
-        list.forEach(w => customOldVocab.add(w));
-    }
+  const stored = localStorage.getItem('customOldVocab');
+  if (stored) {
+    const list = JSON.parse(stored);
+    list.forEach(w => customOldVocab.add(w));
+  }
 }
 
 function saveCustomVocab() {
-    localStorage.setItem('customOldVocab', JSON.stringify([...customOldVocab]));
-    updateBlocklist();
+  localStorage.setItem('customOldVocab', JSON.stringify([...customOldVocab]));
+  updateBlocklist();
 }
 
 // 事件監聽
@@ -246,10 +316,10 @@ function setupEventListeners() {
     const words = text.split(/[\n,、\s]+/).map(w => w.trim()).filter(w => w);
     let addedCount = 0;
     words.forEach(w => {
-        if (!customOldVocab.has(w)) {
-            customOldVocab.add(w);
-            addedCount++;
-        }
+      if (!customOldVocab.has(w)) {
+        customOldVocab.add(w);
+        addedCount++;
+      }
     });
 
     saveCustomVocab();
@@ -262,19 +332,19 @@ function setupEventListeners() {
     document.getElementById('oldVocabInput').value = list.join('\n');
     showStatus(`目前有 ${list.length} 個補充舊詞`, 'info');
   });
-  
+
   document.getElementById('clearOldVocabBtn').addEventListener('click', () => {
-    if(confirm('確定要清除所有「手動補充」的舊詞嗎？(不會影響勾選的課本詞彙)')) {
-        customOldVocab.clear();
-        saveCustomVocab();
-        document.getElementById('oldVocabInput').value = '';
-        showStatus('已清除補充舊詞', 'success');
+    if (confirm('確定要清除所有「手動補充」的舊詞嗎？(不會影響勾選的課本詞彙)')) {
+      customOldVocab.clear();
+      saveCustomVocab();
+      document.getElementById('oldVocabInput').value = '';
+      showStatus('已清除補充舊詞', 'success');
     }
   });
 
   document.getElementById('copyBtn').addEventListener('click', copyResults);
   document.getElementById('exportBtn').addEventListener('click', exportJSON);
-  
+
   document.getElementById('splitInput').addEventListener('keypress', function (e) {
     if (e.key === 'Enter') {
       confirmSplit();
@@ -303,10 +373,10 @@ function analyzeText() {
 
   const results = [];
   const uniqueWords = new Set();
-  
+
   words.forEach(word => {
     if (isPunctuation(word) || !word.trim()) return;
-    if (finalBlocklist.has(word)) return; 
+    if (finalBlocklist.has(word)) return;
 
     if (uniqueWords.has(word)) return;
     uniqueWords.add(word);
@@ -335,9 +405,9 @@ function displayResults() {
     results.forEach((item, index) => {
       const div = document.createElement('div');
       div.className = `vocab-item level-${item.level}`;
-      
+
       const levelText = item.level === '0' ? '未知' : `Level ${item.level}`;
-      
+
       div.innerHTML = `
         <div class="vocab-info">
             <span style="font-size: 18px; font-weight: bold;">${index + 1}. ${item.word}</span>
@@ -353,7 +423,7 @@ function displayResults() {
 
   const wordCount = results.length;
   const charCount = document.getElementById('inputText').value.length;
-  
+
   document.getElementById('stats').innerHTML = `
     <span>總字數: ${charCount}</span>
     <span>生詞數: ${wordCount}</span>
@@ -361,67 +431,67 @@ function displayResults() {
 }
 
 // 開啟切分視窗
-window.openSplitModal = function(index) {
-    if (!window.lastAnalysis || !window.lastAnalysis[index]) return;
-    
-    editingIndex = index;
-    const item = window.lastAnalysis[index];
-    const modal = document.getElementById('splitModal');
-    const input = document.getElementById('splitInput');
-    
-    input.value = item.word; 
-    modal.style.display = 'block';
-    
-    setTimeout(() => { input.focus(); }, 100);
+window.openSplitModal = function (index) {
+  if (!window.lastAnalysis || !window.lastAnalysis[index]) return;
+
+  editingIndex = index;
+  const item = window.lastAnalysis[index];
+  const modal = document.getElementById('splitModal');
+  const input = document.getElementById('splitInput');
+
+  input.value = item.word;
+  modal.style.display = 'block';
+
+  setTimeout(() => { input.focus(); }, 100);
 }
 
-window.closeSplitModal = function() {
-    document.getElementById('splitModal').style.display = 'none';
-    editingIndex = -1;
+window.closeSplitModal = function () {
+  document.getElementById('splitModal').style.display = 'none';
+  editingIndex = -1;
 }
 
-window.confirmSplit = function() {
-    if (editingIndex === -1) return;
-    
-    const inputVal = document.getElementById('splitInput').value;
-    const originalWord = window.lastAnalysis[editingIndex].word;
-    
-    if (!inputVal.trim()) {
-        closeSplitModal();
-        return;
-    }
-    
-    const newWordsRaw = inputVal.split(/\s+/).filter(w => w.trim());
-    
-    const newCombined = newWordsRaw.join('');
-    if (newCombined !== originalWord) {
-        if (!confirm(`您輸入的「${newCombined}」與原詞「${originalWord}」不符，確定要修改嗎？`)) {
-            return;
-        }
-    }
-    
-    const newResultItems = newWordsRaw.map(word => {
-        const level = tbclData[word] || '0';
-        return { word, level };
-    });
-    
-    window.lastAnalysis.splice(editingIndex, 1, ...newResultItems);
-    
-    displayResults();
+window.confirmSplit = function () {
+  if (editingIndex === -1) return;
+
+  const inputVal = document.getElementById('splitInput').value;
+  const originalWord = window.lastAnalysis[editingIndex].word;
+
+  if (!inputVal.trim()) {
     closeSplitModal();
+    return;
+  }
+
+  const newWordsRaw = inputVal.split(/\s+/).filter(w => w.trim());
+
+  const newCombined = newWordsRaw.join('');
+  if (newCombined !== originalWord) {
+    if (!confirm(`您輸入的「${newCombined}」與原詞「${originalWord}」不符，確定要修改嗎？`)) {
+      return;
+    }
+  }
+
+  const newResultItems = newWordsRaw.map(word => {
+    const level = tbclData[word] || '0';
+    return { word, level };
+  });
+
+  window.lastAnalysis.splice(editingIndex, 1, ...newResultItems);
+
+  displayResults();
+  closeSplitModal();
 }
 
 function showStatus(msg, type) {
-    const el = document.getElementById('vocabStatus');
-    el.innerText = msg;
-    el.className = `status ${type}`;
-    el.style.display = 'block';
-    setTimeout(() => { el.style.display = 'none'; }, 3000);
+  const el = document.getElementById('vocabStatus');
+  el.innerText = msg;
+  el.className = `status ${type}`;
+  el.style.display = 'block';
+  setTimeout(() => { el.style.display = 'none'; }, 3000);
 }
 
 function copyResults() {
   if (!window.lastAnalysis || window.lastAnalysis.length === 0) return;
-  const text = window.lastAnalysis.map((item, i) => `${i+1}. ${item.word} (Level ${item.level})`).join('\n');
+  const text = window.lastAnalysis.map((item, i) => `${i + 1}. ${item.word} (Level ${item.level})`).join('\n');
   navigator.clipboard.writeText(text).then(() => alert('已複製到剪貼簿'));
 }
 
